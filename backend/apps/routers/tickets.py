@@ -127,6 +127,23 @@ def update_ticket(
         "data": {"id": ticket.id, "status": ticket.status, "priority": ticket.priority},
     }
 
+@router.get("/{id}", response_model=TicketOut)
+def get_ticket_by_id(
+    id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)  
+):
+    ticket = (
+        db.query(Ticket)
+        .options(joinedload(Ticket.assigned_user))  
+        .filter(Ticket.id == id)
+        .first()
+    )
+
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    return ticket
 
 @router.get("/stats")
 def get_ticket_stats(

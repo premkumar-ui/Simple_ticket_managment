@@ -12,6 +12,7 @@ import AdminUser from "./pages/AdminUser";
 import AdminDashboardStats from "./pages/AdminDashboardStats";
 import { AssignUser } from "./pages/AssignUser";
 import AdminUserTickets from "./pages/AdminUserTickets";
+import TicketDetail from "./pages/TicketDetail";
 
 function App() {
   const location = useLocation();
@@ -40,6 +41,11 @@ function App() {
             <Route path="/create-ticket" element={
               <ProtectedRoute role="USER">
                 <CreateTicket  />
+              </ProtectedRoute>
+            } />
+            <Route path="/ticket/:id" element={
+              <ProtectedRoute role="USER">
+                <TicketDetail  />
               </ProtectedRoute>
             } />
             <Route path="/assign" element={
