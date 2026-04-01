@@ -75,9 +75,13 @@ class TicketOut(BaseModel):
     description: str
     priority: str
     status: str
+    user:UserOut
     created_at: datetime
     assigned_to: int | None
     assigned_user: UserOut | None   # 🔥 THIS LINE
 
     class Config:
         from_attributes = True
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

@@ -6,7 +6,6 @@ import API from "../api/axios";
 
 const Navbar = () => {
     const { user, logout } = useContext(AuthContext);
-
     const [menuOpen, setMenuOpen] = useState(false);
     const [profileBar, setProfileBar] = useState(false);
     const [profileEdit, setProfileEdit] = useState(false);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import API from "../api/axios";
 import { FaFire, FaExclamationCircle, FaCheckCircle } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
 const AdminDashboard = () => {
   const [tickets, setTickets] = useState({});
@@ -194,7 +195,7 @@ const AdminDashboard = () => {
                 className={`bg-white shadow-md rounded-xl p-4 pt-2 border-l-4 ${priorityColor} hover:shadow-lg transition`}
               >
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">{t.title}</h3>
+                  <Link to={`/admin/ticket/${t.id}`} className="hover:underline"><h3 className="text-lg font-semibold">{t.title}</h3></Link>
 
                   <span
                     className={`text-xs px-2 pb-1 pt-0.5 rounded-full ${t.status === "open"

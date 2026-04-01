@@ -1,16 +1,33 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import API from "../api/axios";
+import { AuthContext } from "../context/AuthContext";
 
 const TicketDetail = () => {
     const { id } = useParams();
     const [ticket, setTicket] = useState(null);
-
+    const [selectedTicket, setSelectedTicket] = useState(null);
+    const [assignModalOpen, setAssignModalOpen] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const {user}=useContext(AuthContext)
     useEffect(() => {
         API.get(`/tickets/${id}`)
-            .then(res => setTicket(res.data))
+            .then(res => { setTicket(res.data); setSelectedTicket(res.data) })
             .catch(err => console.log(err));
     }, [id]);
+
+    const handleUpdate = async () => {
+        if (!window.confirm("Sure you need to change the status?")) return;
+        const status = selectedTicket.status
+        const priority = selectedTicket.priority
+        try {
+            await API.put(`/tickets/sp/${selectedTicket.id}/`, { status, priority });
+            fetchTickets();
+            setIsModalOpen(false)
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     if (!ticket) return <p className="p-6">Loading...</p>;
 
@@ -103,15 +120,118 @@ const TicketDetail = () => {
             </div>
 
             {/* ACTIONS */}
-            <div className="mt-4 flex gap-3">
-                <button className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
+            {user.role === "ADMIN"&& (
+                <div className="mt-4 flex gap-3">
+                <button onClick={()=>setIsModalOpen(true)} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
                     Update Status
                 </button>
 
-                {/* <button className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">
+                <button onClick={()=>setAssignModalOpen(true)} className="px-4 py-2 text-sm text-white bg-blue-400 rounded hover:bg-blue-600">
                     Assign User
-                </button> */}
+                </button>
             </div>
+            )}
+            {assignModalOpen && selectedTicket && (
+                <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 text-gray-800">
+                    <div className="bg-white rounded-xl p-6 w-80 shadow-xl animate-scaleIn">
+                        <h2 className="text-lg font-semibold mb-4">Assign Ticket</h2>
+
+                        {/* Status */}
+                        <label className="">Assign To</label>
+                        <select
+                            value={selectedTicket.assigned_to || ""}
+                            onChange={(e) =>
+                                setSelectedTicket({
+                                    ...selectedTicket,
+                                    assigned_to: Number(e.target.value),
+                                })
+                            }
+                            className="w-full border px-2 py-1 text-sm rounded mb-3"
+                        >
+                            <option value="">Unassigned</option>
+                            {users.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                    {u.name}
+                                </option>
+                            ))}
+                        </select>
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setAssignModalOpen(false)}
+                                className="px-3 py-1 text-xs bg-gray-300 rounded"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={handleAssign}
+                                className="px-3 py-1 bg-blue-600 text-xs text-white rounded"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isModalOpen && selectedTicket && (
+                <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 text-gray-800">
+                    <div className="bg-white rounded-xl p-6 w-80 shadow-xl animate-scaleIn">
+                        <h2 className="text-lg font-semibold mb-4">Edit Ticket</h2>
+
+                        {/* Status */}
+                        <label>Status</label>
+                        <select
+                            value={selectedTicket.status}
+                            onChange={(e) =>
+                                setSelectedTicket({
+                                    ...selectedTicket,
+                                    status: e.target.value,
+                                })
+                            }
+                            className="w-full border px-2 py-1 text-sm rounded mb-3"
+                        >
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="closed">Closed</option>
+                        </select>
+
+                        {/* Priority */}
+                        <label>Priority</label>
+                        <select
+                            value={selectedTicket.priority}
+                            onChange={(e) =>
+                                setSelectedTicket({
+                                    ...selectedTicket,
+                                    priority: e.target.value,
+                                })
+                            }
+                            className="w-full border px-2 py-1 text-sm rounded mb-4"
+                        >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </select>
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-3 py-1 text-xs bg-gray-300 rounded"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={handleUpdate}
+                                className="px-3 py-1 bg-blue-600 text-xs text-white rounded"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

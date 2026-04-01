@@ -3,16 +3,18 @@ from sqlalchemy.orm import Session
 from apps.models.user_model import User
 from apps.schema import *
 from apps.utils.password import hash_password, verify_password
-from apps.utils.jwt import create_access_token
+from apps.utils.jwt import ALGORITHM, SECRET_KEY, create_access_token, create_refresh_token
 from apps.dependencies import get_db, get_current_user, role_required
 from fastapi import UploadFile, File, Form
 import shutil
 import os
 import uuid
+from jose import JWTError, jwt
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 UPLOAD_DIR = "uploads/profile"
+
 
 # 🔥 LOGIN
 @router.post("/login")
@@ -25,13 +27,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user.is_active:
         raise HTTPException(403, "User account is inactive")
 
-    token = create_access_token({
-        "id": db_user.id,
-        "role": db_user.role.value
-    })
-
+    token = create_access_token({"id": db_user.id, "role": db_user.role.value})
+    refresh_token = create_refresh_token(
+        {"id": db_user.id, "role": db_user.role.value}
+    )
     return {
         "access_token": token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": {
             "id": db_user.id,
@@ -39,8 +41,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "email": db_user.email,
             "role": db_user.role.value,
             "profile_image": db_user.profile_image,
-            "is_active": db_user.is_active
-        }
+            "is_active": db_user.is_active,
+        },
     }
 
 
@@ -58,20 +60,20 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
         password=hash_password(user.password),
         role=user.role,
         profile_image=None,
-        is_active=True
+        is_active=True,
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    token = create_access_token({
-        "id": new_user.id,
-        "role": new_user.role.value
-    })
-
+    token = create_access_token({"id": new_user.id, "role": new_user.role.value})
+    refresh_token = create_refresh_token(
+        {"id": new_user.id, "role": new_user.role.value}
+    )
     return {
         "access_token": token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": {
             "id": new_user.id,
@@ -79,8 +81,8 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
             "email": new_user.email,
             "role": new_user.role.value,
             "profile_image": new_user.profile_image,
-            "is_active": new_user.is_active
-        }
+            "is_active": new_user.is_active,
+        },
     }
 
 
@@ -93,7 +95,7 @@ def get_profile(user=Depends(get_current_user)):
         "email": user.email,
         "role": user.role.value,
         "profile_image": user.profile_image,
-        "is_active": user.is_active
+        "is_active": user.is_active,
     }
 
 
@@ -102,7 +104,7 @@ def update_profile(
     name: str = Form(None),
     file: UploadFile = File(None),
     db: Session = Depends(get_db),
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
 ):
     # ✅ Update name
     if name:
@@ -130,17 +132,14 @@ def update_profile(
         "user": {
             "name": user.name,
             "email": user.email,
-            "profile_image": user.profile_image
-        }
+            "profile_image": user.profile_image,
+        },
     }
 
 
 # 🔥 ADMIN: GET ALL USERS
 @router.get("/users")
-def get_all_users(
-    db: Session = Depends(get_db),
-    admin=Depends(role_required("ADMIN"))
-):
+def get_all_users(db: Session = Depends(get_db), admin=Depends(role_required("ADMIN"))):
     users = db.query(User).all()
 
     return [
@@ -150,16 +149,14 @@ def get_all_users(
             "email": u.email,
             "role": u.role.value,
             "profile_image": u.profile_image,
-            "is_active": u.is_active
+            "is_active": u.is_active,
         }
         for u in users
     ]
 
+
 @router.get("/user")
-def get_all_users(
-    db: Session = Depends(get_db),
-    admin=Depends(role_required("ADMIN"))
-):
+def get_all_users(db: Session = Depends(get_db), admin=Depends(role_required("ADMIN"))):
     users = db.query(User).filter(User.role != "ADMIN").all()
 
     return [
@@ -169,17 +166,16 @@ def get_all_users(
             "email": u.email,
             "role": u.role.value,
             "profile_image": u.profile_image,
-            "is_active": u.is_active
+            "is_active": u.is_active,
         }
         for u in users
     ]
 
+
 # 🔥 ADMIN: TOGGLE USER ACTIVE
 @router.put("/users/{user_id}/toggle-active")
 def toggle_user_active(
-    user_id: int,
-    db: Session = Depends(get_db),
-    admin=Depends(role_required("ADMIN"))
+    user_id: int, db: Session = Depends(get_db), admin=Depends(role_required("ADMIN"))
 ):
     user = db.query(User).filter(User.id == user_id).first()
 
@@ -189,7 +185,21 @@ def toggle_user_active(
     user.is_active = not user.is_active
     db.commit()
 
-    return {
-        "message": "User status updated",
-        "is_active": user.is_active
-    }
+    return {"message": "User status updated", "is_active": user.is_active}
+
+@router.post("/refresh")
+def refresh_token(data: RefreshTokenRequest):
+    try:
+        payload = jwt.decode(data.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        new_access_token = create_access_token({
+            "id": payload["id"],
+            "role": payload["role"]
+        })
+
+        return {
+            "access_token": new_access_token
+        }
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")

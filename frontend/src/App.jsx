@@ -64,6 +64,11 @@ function App() {
                 <AdminDashboard />
               </ProtectedRoute>
             } />
+            <Route path="/admin/ticket/:id" element={
+              <ProtectedRoute role="ADMIN">
+                <TicketDetail />
+              </ProtectedRoute>
+            } />
             <Route path="/admin/assigned-tickets" element={
               <ProtectedRoute role="ADMIN">
                 <AdminUserTickets />
