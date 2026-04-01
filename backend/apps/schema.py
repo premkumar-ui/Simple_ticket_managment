@@ -78,10 +78,15 @@ class TicketOut(BaseModel):
     user:UserOut
     created_at: datetime
     assigned_to: int | None
-    assigned_user: UserOut | None   # 🔥 THIS LINE
+    updated_at: datetime | None
+    closed_at: datetime | None
+    assigned_user: UserOut | None   
 
     class Config:
         from_attributes = True
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+    
+class TicketStatusUpdate(BaseModel):
+    status: str

@@ -7,6 +7,8 @@ export const AssignUser = () => {
     const [tickets, setTickets] = useState([]);
     const [filteredTickets, setFilteredTickets] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedTicket, setSelectedTicket] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [status, setStatus] = useState("All");
     const [priority, setPriority] = useState("All");
 
@@ -26,6 +28,19 @@ export const AssignUser = () => {
     useEffect(() => {
         fetchTickets();
     }, []);
+
+    const handleUpdate = async () => {
+        if (!window.confirm("Sure you need to change the status?")) return;
+        const status = selectedTicket.status
+        const priority = selectedTicket.priority
+        try {
+            await API.put(`/tickets/${selectedTicket.id}/status`, { status });
+            fetchTickets();
+            setIsModalOpen(false)
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const statusTabs = ["All", "open", "in_progress", "closed"];
     const priorityTabs = ["All", "High", "Medium", "Low"];
@@ -48,6 +63,7 @@ export const AssignUser = () => {
             </p>
         </div>
     );
+
     useEffect(() => {
         let temp = [...tickets];
 
@@ -124,7 +140,7 @@ export const AssignUser = () => {
                                 className={`bg-white shadow-md rounded-xl p-4 border-l-4 ${priorityColor} hover:shadow-lg transition`}
                             >
                                 <div className="flex justify-between items-center">
-                                     <Link to={`/ticket/${t.id}`} className="hover:underline"><h3 className="text-lg font-semibold">{t.title}</h3></Link>
+                                    <Link to={`/ticket/${t.id}`} className="hover:underline"><h3 className="text-lg font-semibold">{t.title}</h3></Link>
 
                                     <span
                                         className={`text-xs px-2 pb-1 pt-0.5 rounded-full ${t.status === "open"
@@ -161,11 +177,75 @@ export const AssignUser = () => {
                                         </span>
                                     </span>
                                 </div>
+                                <div className="mt-3 text-sm text-end">
+                                    <button onClick={() => {
+                                        setSelectedTicket(t);
+                                        setIsModalOpen(true);
+                                    }} className="text-xs font-medium px-2 py-1  text-white bg-indigo-300 rounded hover:bg-indigo-400">Edit</button>
+                                </div>
                             </div>
                         );
                     })
                 )}
             </div>
+            {/* Edit model */}
+            {isModalOpen && selectedTicket && (
+                <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-80 shadow-xl animate-scaleIn">
+                        <h2 className="text-lg font-semibold mb-4">Edit Ticket</h2>
+
+                        {/* Status */}
+                        <label>Status</label>
+                        <select
+                            value={selectedTicket.status}
+                            onChange={(e) =>
+                                setSelectedTicket({
+                                    ...selectedTicket,
+                                    status: e.target.value,
+                                })
+                            }
+                            className="w-full border px-2 py-1 text-sm rounded mb-3"
+                        >
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="closed">Closed</option>
+                        </select>
+
+                        {/* Priority */}
+                        {/* <label>Priority</label>
+                        <select
+                            value={selectedTicket.priority}
+                            onChange={(e) =>
+                                setSelectedTicket({
+                                    ...selectedTicket,
+                                    priority: e.target.value,
+                                })
+                            }
+                            className="w-full border px-2 py-1 text-sm rounded mb-4"
+                        >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </select> */}
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="px-3 py-1 text-xs bg-gray-300 rounded"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={handleUpdate}
+                                className="px-3 py-1 bg-blue-600 text-xs text-white rounded"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

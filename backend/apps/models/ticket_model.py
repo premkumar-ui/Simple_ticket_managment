@@ -15,6 +15,8 @@ class Ticket(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     user_id = Column(Integer, ForeignKey("users.id"))
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())   # 🔥 NEW
+    closed_at = Column(DateTime(timezone=True), nullable=True)         # 🔥 NEW
 
     user = relationship("User", foreign_keys=[user_id], back_populates="tickets")
     assigned_user = relationship(

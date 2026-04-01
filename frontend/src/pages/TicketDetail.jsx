@@ -111,7 +111,7 @@ const TicketDetail = () => {
                             <span className="text-gray-500">Ticket ID:</span> {ticket.id}
                         </p>
 
-                        <p>
+                        <p className="text-sm">
                             <span className="text-gray-500">Created At:</span>{" "}
                             {new Date(ticket.created_at).toLocaleString()}
                         </p>

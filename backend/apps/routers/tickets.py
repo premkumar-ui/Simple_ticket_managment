@@ -112,12 +112,18 @@ def update_ticket(
     if not ticket:
         raise HTTPException(404, "Ticket not found")
 
-    # update only if provided
+    # if ticket.assigned_to != user.id:
+    #     raise HTTPException(403, "Not allowed to update this ticket")
+    
     if data.status is not None:
         ticket.status = data.status
-
+        
+        if data.status == "closed":
+            ticket.closed_at = func.now()
+        
     if data.priority is not None:
         ticket.priority = data.priority
+    ticket.updated_at = func.now()
 
     db.commit()
     db.refresh(ticket)
@@ -185,7 +191,8 @@ def assign_ticket(
         raise HTTPException(404, "User not found")
 
     ticket.assigned_to = assigned_user.id
-
+    ticket.updated_at = func.now()   
+    
     db.commit()
     db.refresh(ticket)
 
@@ -216,6 +223,37 @@ def get_tickets_by_user(
 
     return query.all()
 
+@router.put("/{id}/status")
+def update_ticket_status(
+    id: int,
+    data: TicketStatusUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    ticket = db.query(Ticket).filter(Ticket.id == id).first()
+
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+
+    # 🔥 enforce assignment rule
+    if ticket.assigned_to != user.id:
+        raise HTTPException(403, "Not allowed to update this ticket")
+
+    ticket.status = data.status
+    ticket.updated_at = func.now()
+
+    # 🔥 auto close timestamp
+    if data.status == "closed":
+        ticket.closed_at = func.now()
+
+    db.commit()
+    db.refresh(ticket)
+
+    return {
+        "message": "Status updated",
+        "status": ticket.status
+    }
+    
 @router.get("/{id}", response_model=TicketOut)
 def get_ticket_by_id(
     id: int,
