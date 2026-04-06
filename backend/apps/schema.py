@@ -53,6 +53,9 @@ class TicketResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 class TicketUpdate(BaseModel):
     status: Optional[str] = None
@@ -90,3 +93,17 @@ class RefreshTokenRequest(BaseModel):
     
 class TicketStatusUpdate(BaseModel):
     status: str
+    
+
+class CommentCreate(BaseModel):
+    content: str
+
+class CommentOut(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+
+    user: UserOut
+
+    class Config:
+        from_attributes = True

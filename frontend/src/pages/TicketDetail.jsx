@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import API from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
+import { User } from "lucide-react";
 
 const TicketDetail = () => {
     const { id } = useParams();
@@ -9,11 +10,20 @@ const TicketDetail = () => {
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [assignModalOpen, setAssignModalOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const {user}=useContext(AuthContext)
+    const { user } = useContext(AuthContext)
+    const [comments, setComments] = useState([]);
+    const [newComment, setNewComment] = useState("");
+
+    const fetchComments = () => {
+        API.get(`/comments/${id}`)
+            .then(res => setComments(res.data))
+            .catch(err => console.log(err));
+    };
     useEffect(() => {
         API.get(`/tickets/${id}`)
             .then(res => { setTicket(res.data); setSelectedTicket(res.data) })
             .catch(err => console.log(err));
+        fetchComments();
     }, [id]);
 
     const handleUpdate = async () => {
@@ -24,6 +34,30 @@ const TicketDetail = () => {
             await API.put(`/tickets/sp/${selectedTicket.id}/`, { status, priority });
             fetchTickets();
             setIsModalOpen(false)
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleAddComment = async () => {
+        if (!newComment.trim()) return;
+
+        try {
+            await API.post(`/comments/${id}`, {
+                content: newComment
+            });
+            setNewComment("");
+            fetchComments();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // 🔥 DELETE COMMENT
+    const handleDeleteComment = async (commentId) => {
+        try {
+            await API.delete(`/comments/${commentId}`);
+            fetchComments();
         } catch (err) {
             console.error(err);
         }
@@ -118,18 +152,84 @@ const TicketDetail = () => {
                     </div>
                 </div>
             </div>
+            <div className="bg-white rounded-xl shadow p-6 mt-6">
+                <h2 className="font-semibold mb-4">Comments</h2>
 
-            {/* ACTIONS */}
-            {user.role === "ADMIN"&& (
-                <div className="mt-4 flex gap-3">
-                <button onClick={()=>setIsModalOpen(true)} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
-                    Update Status
-                </button>
+                {/* Add Comment */}
+                <div className="flex gap-2 mb-4">
+                    <input
+                        type="text"
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Write a comment..."
+                        className="flex-1 border px-3 py-2 rounded text-sm"
+                    />
+                    <button
+                        onClick={handleAddComment}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded text-sm"
+                    >
+                        Post
+                    </button>
+                </div>
 
-                <button onClick={()=>setAssignModalOpen(true)} className="px-4 py-2 text-sm text-white bg-blue-400 rounded hover:bg-blue-600">
-                    Assign User
-                </button>
+                {/* Comments List */}
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {comments.length === 0 && (
+                        <p className="text-gray-400 text-sm">No comments yet</p>
+                    )}
+
+                    {comments.map((c) => (
+                        <div
+                            key={c.id}
+                            className="border p-2 rounded-lg flex justify-between items-start"
+                        >
+                            <div className="flex justify-center items-center gap-2 ">
+                                <div className="flex justify-center items-center gap-2 ">
+                                    {c?.user.profile_image ? (
+                                        <img
+                                            src={`http://127.0.0.1:8000${c?.user?.profile_image}`}
+                                            className="w-8 h-8 rounded-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                                            <User size={20} />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="">
+                                    <p className="text-sm font-medium mb-0 text-gray-800">
+                                        {c.user?.name} <span className="text-[10px] ml-2 text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                                    </p>
+                                    <p className="text-sm ml-1 text-gray-600">
+                                        {c.content}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Delete button (only own comment) */}
+                            {c.user?.id === user.id && (
+                                <button
+                                    onClick={() => handleDeleteComment(c.id)}
+                                    className="text-xs text-red-500"
+                                >
+                                    Delete
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
             </div>
+            {/* ACTIONS */}
+            {user.role === "ADMIN" && (
+                <div className="mt-4 flex gap-3">
+                    <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                        Update Status
+                    </button>
+
+                    <button onClick={() => setAssignModalOpen(true)} className="px-4 py-2 text-sm text-white bg-blue-400 rounded hover:bg-blue-600">
+                        Assign User
+                    </button>
+                </div>
             )}
             {assignModalOpen && selectedTicket && (
                 <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 text-gray-800">

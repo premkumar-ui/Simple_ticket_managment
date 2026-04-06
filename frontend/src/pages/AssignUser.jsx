@@ -178,10 +178,12 @@ export const AssignUser = () => {
                                     </span>
                                 </div>
                                 <div className="mt-3 text-sm text-end">
-                                    <button onClick={() => {
-                                        setSelectedTicket(t);
-                                        setIsModalOpen(true);
-                                    }} className="text-xs font-medium px-2 py-1  text-white bg-indigo-300 rounded hover:bg-indigo-400">Edit</button>
+                                    {t.status !== "closed" && (
+                                        <button onClick={() => {
+                                            setSelectedTicket(t);
+                                            setIsModalOpen(true);
+                                        }} className="text-xs font-medium px-2 py-1  text-white bg-indigo-300 rounded hover:bg-indigo-400">Edit</button>
+                                    )}
                                 </div>
                             </div>
                         );

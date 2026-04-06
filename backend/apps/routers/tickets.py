@@ -1,5 +1,10 @@
 from typing import Optional
-
+from apps.utils.redis_client import (
+    clear_ticket_cache,
+    clear_ticket_cache,
+    get_cache,
+    set_cache,
+)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -7,6 +12,8 @@ from apps.models.ticket_model import Ticket
 from apps.schema import *
 from apps.dependencies import get_db, get_current_user, role_required
 from apps.models.user_model import User
+from fastapi import BackgroundTasks
+from apps.utils.log_notify import *
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
@@ -14,6 +21,7 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 @router.post("/")
 def create_ticket(
     data: TicketCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(role_required("USER")),
 ):
@@ -26,6 +34,8 @@ def create_ticket(
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
+    background_tasks.add_task(send_ticket_created_notification, ticket)
+    clear_ticket_cache()
     return ticket
 
 
@@ -35,7 +45,6 @@ def create_ticket(
 #     user = Depends(role_required("ADMIN"))
 # ):
 #     return db.query(Ticket).all()
-
 
 @router.get("/")
 def get_all_tickets(
@@ -47,17 +56,20 @@ def get_all_tickets(
     db: Session = Depends(get_db),
     user=Depends(role_required("ADMIN")),
 ):
+    cache_key = f"tickets:{status}:{priority}:{search}:{skip}:{limit}"
+
+    cached_data = get_cache(cache_key)
+    if cached_data:
+        return cached_data
+
     query = db.query(Ticket)
 
-    # 🔥 Filter by status
     if status:
         query = query.filter(Ticket.status == status)
 
-    # 🔥 Filter by priority
     if priority:
         query = query.filter(Ticket.priority == priority)
 
-    # 🔥 Search (title + description)
     if search:
         query = query.filter(
             or_(
@@ -67,10 +79,19 @@ def get_all_tickets(
         )
 
     total = query.count()
-
     tickets = query.offset(skip).limit(limit).all()
 
-    return {"total": total, "data": tickets}
+    # 🔥 convert to JSON serializable
+    ticket_list = [TicketResponse.model_validate(t).model_dump(mode="json") for t in tickets]
+
+    response = {
+        "total": total,
+        "data": ticket_list
+    }
+
+    set_cache(cache_key, response, expire=300)
+
+    return response
 
 
 @router.get("/my")
@@ -114,20 +135,20 @@ def update_ticket(
 
     # if ticket.assigned_to != user.id:
     #     raise HTTPException(403, "Not allowed to update this ticket")
-    
+
     if data.status is not None:
         ticket.status = data.status
-        
+
         if data.status == "closed":
             ticket.closed_at = func.now()
-        
+
     if data.priority is not None:
         ticket.priority = data.priority
     ticket.updated_at = func.now()
 
     db.commit()
     db.refresh(ticket)
-
+    clear_ticket_cache()
     return {
         "message": "Ticket updated",
         "data": {"id": ticket.id, "status": ticket.status, "priority": ticket.priority},
@@ -138,16 +159,20 @@ def update_ticket(
 def get_ticket_stats(
     db: Session = Depends(get_db), user=Depends(role_required("ADMIN"))
 ):
+    cache_key = "ticket_stats"
+
+    cached = get_cache(cache_key)
+    if cached:
+        return cached
+
     total = db.query(func.count(Ticket.id)).scalar()
 
     open_count = (
         db.query(func.count(Ticket.id)).filter(Ticket.status == "open").scalar()
     )
-
     closed_count = (
         db.query(func.count(Ticket.id)).filter(Ticket.status == "closed").scalar()
     )
-
     in_progress_count = (
         db.query(func.count(Ticket.id)).filter(Ticket.status == "in_progress").scalar()
     )
@@ -161,8 +186,7 @@ def get_ticket_stats(
 
     for p, count in priority_data:
         priority_stats[p] = count
-
-    return {
+    response ={
         "total": total,
         "status": {
             "open": open_count,
@@ -171,12 +195,17 @@ def get_ticket_stats(
         },
         "priority": priority_stats,
     }
+    set_cache(cache_key, response, expire=300)
+    
+    return response
+
 
 
 @router.put("/{id}/assign")
 def assign_ticket(
     id: int,
     data: TicketAssign,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(role_required("ADMIN")),
 ):
@@ -191,11 +220,14 @@ def assign_ticket(
         raise HTTPException(404, "User not found")
 
     ticket.assigned_to = assigned_user.id
-    ticket.updated_at = func.now()   
-    
+    ticket.updated_at = func.now()
+
     db.commit()
     db.refresh(ticket)
-
+    background_tasks.add_task(
+        send_ticket_assigned_notification, ticket, assigned_user
+    )
+    clear_ticket_cache()
     return {"message": "Ticket assigned", "assigned_to": assigned_user.name}
 
 
@@ -212,8 +244,9 @@ def get_my_assigned_tickets(
 def get_tickets_by_user(
     user_id: int | None = None,
     db: Session = Depends(get_db),
-    admin=Depends(role_required("ADMIN"))
+    admin=Depends(role_required("ADMIN")),
 ):
+
     query = db.query(Ticket).options(joinedload(Ticket.assigned_user))
 
     if user_id is not None:
@@ -223,10 +256,12 @@ def get_tickets_by_user(
 
     return query.all()
 
+
 @router.put("/{id}/status")
 def update_ticket_status(
     id: int,
     data: TicketStatusUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -245,25 +280,22 @@ def update_ticket_status(
     # 🔥 auto close timestamp
     if data.status == "closed":
         ticket.closed_at = func.now()
+        background_tasks.add_task(send_ticket_closed_notification, ticket)
 
     db.commit()
     db.refresh(ticket)
+    clear_ticket_cache()
+    return {"message": "Status updated", "status": ticket.status}
 
-    return {
-        "message": "Status updated",
-        "status": ticket.status
-    }
-    
+
 @router.get("/{id}", response_model=TicketOut)
 def get_ticket_by_id(
-    id: int,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)  
+    id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
 ):
     ticket = (
         db.query(Ticket)
-        .options(joinedload(Ticket.user))  
-        .options(joinedload(Ticket.assigned_user))  
+        .options(joinedload(Ticket.user))
+        .options(joinedload(Ticket.assigned_user))
         .filter(Ticket.id == id)
         .first()
     )

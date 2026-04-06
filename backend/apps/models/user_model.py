@@ -31,3 +31,4 @@ class User(Base):
         foreign_keys="Ticket.assigned_to",
         back_populates="assigned_user"
     )
+    comments = relationship("Comment", back_populates="user")
